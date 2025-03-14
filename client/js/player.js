@@ -333,46 +333,143 @@ class Player {
 
     checkCollisions(otherPlayers) {
         let hasCollision = false;
-        const pushForce = 2; // Fuerza con la que los jugadores se empujan
+        const pushForce = 3; // Aumentado para mayor resistencia
 
         for (const other of otherPlayers) {
             if (other.id === this.id) continue;
 
-            if (this.isColliding(other)) {
+            // Obtener los puntos de ambos jugadores
+            const myPoints = this.getPoints();
+            const otherPoints = other.getPoints();
+
+            // Usar SAT para detectar colisión
+            if (this.checkPolygonCollision(myPoints, otherPoints)) {
                 hasCollision = true;
 
-                // Calcular el vector de separación
-                const dx = this.x + this.size/2 - (other.x + other.size/2);
-                const dy = this.y + this.size/2 - (other.y + other.size/2);
+                // Calcular vector de separación
+                const myCenter = {
+                    x: this.x + this.size/2,
+                    y: this.y + this.size/2
+                };
+                const otherCenter = {
+                    x: other.x + other.size/2,
+                    y: other.y + other.size/2
+                };
+
+                // Vector desde el otro jugador hacia este
+                const dx = myCenter.x - otherCenter.x;
+                const dy = myCenter.y - otherCenter.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < 1) continue; // Evitar división por cero
 
-                // Normalizar el vector
-                const nx = dx / distance;
-                const ny = dy / distance;
+                if (distance > 0) {
+                    // Normalizar el vector de separación
+                    const nx = dx / distance;
+                    const ny = dy / distance;
 
-                // Calcular la superposición
-                const overlap = (this.size + other.size) / 2 - distance;
+                    // Aplicar una fuerza de empuje más fuerte
+                    this.x += nx * pushForce;
+                    this.y += ny * pushForce;
 
-                if (overlap > 0) {
-                    // Empujar a ambos jugadores en direcciones opuestas
-                    this.x += nx * overlap/2 * pushForce;
-                    this.y += ny * overlap/2 * pushForce;
-
-                    // Aplicar límites del mapa después de la corrección
+                    // Asegurar que el jugador no salga del mapa
                     this.x = Math.max(0, Math.min(1000 - this.size, this.x));
                     this.y = Math.max(0, Math.min(800 - this.size, this.y));
 
-                    // Añadir un pequeño impulso aleatorio para evitar bloqueos
-                    if (Math.random() < 0.1) {
-                        this.x += (Math.random() - 0.5) * 2;
-                        this.y += (Math.random() - 0.5) * 2;
+                    // Detener el movimiento en la dirección de la colisión
+                    if (Math.abs(nx) > 0.5) {
+                        if ((nx > 0 && this.moveLeft) || (nx < 0 && this.moveRight)) {
+                            this.x = this.previousX;
+                        }
+                    }
+                    if (Math.abs(ny) > 0.5) {
+                        if ((ny > 0 && this.moveUp) || (ny < 0 && this.moveDown)) {
+                            this.y = this.previousY;
+                        }
                     }
                 }
             }
         }
 
         return hasCollision;
+    }
+
+    getPoints() {
+        const points = [];
+        const centerX = this.x + this.size/2;
+        const centerY = this.y + this.size/2;
+
+        switch(this.shape) {
+            case 'square':
+                // Puntos en las esquinas
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i * Math.PI / 2) + this.rotation;
+                    const radius = this.size / 2 * Math.SQRT2;
+                    points.push({
+                        x: centerX + Math.cos(angle) * radius,
+                        y: centerY + Math.sin(angle) * radius
+                    });
+                }
+                
+                // Puntos adicionales en los bordes
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i * Math.PI / 2) + this.rotation;
+                    const nextAngle = ((i + 1) * Math.PI / 2) + this.rotation;
+                    
+                    // Añadir puntos intermedios en cada borde
+                    for (let j = 1; j < 3; j++) {
+                        const t = j / 3;
+                        const intermediateAngle = angle + (nextAngle - angle) * t;
+                        const radius = this.size / 2;
+                        points.push({
+                            x: centerX + Math.cos(intermediateAngle) * radius,
+                            y: centerY + Math.sin(intermediateAngle) * radius
+                        });
+                    }
+                }
+                break;
+
+            case 'triangle':
+                for (let i = 0; i < 3; i++) {
+                    const angle = (i * 2 * Math.PI / 3) + this.rotation;
+                    const radius = this.size / 2;
+                    points.push({
+                        x: centerX + Math.cos(angle) * radius,
+                        y: centerY + Math.sin(angle) * radius
+                    });
+                }
+                break;
+
+            case 'circle':
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i * Math.PI / 4) + this.rotation;
+                    const radius = this.size / 2;
+                    points.push({
+                        x: centerX + Math.cos(angle) * radius,
+                        y: centerY + Math.sin(angle) * radius
+                    });
+                }
+                break;
+
+            case 'pentagon':
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 2 * Math.PI / 5) + this.rotation;
+                    const radius = this.size / 2;
+                    points.push({
+                        x: centerX + Math.cos(angle) * radius,
+                        y: centerY + Math.sin(angle) * radius
+                    });
+                }
+                break;
+
+            case 'line':
+                const length = this.size;
+                const angle = this.rotation;
+                points.push(
+                    {x: centerX - Math.cos(angle) * length/2, y: centerY - Math.sin(angle) * length/2},
+                    {x: centerX + Math.cos(angle) * length/2, y: centerY + Math.sin(angle) * length/2}
+                );
+                break;
+        }
+
+        return points;
     }
 } 
