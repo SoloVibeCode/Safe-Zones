@@ -1,0 +1,120 @@
+A continuación, te presento un **PRD (Product Requirements Document)** claro, conciso y estructurado para el juego multijugador online que describes. Este documento está diseñado para ser comprensible por herramientas como Cursor, que utilizarás para programar el juego, al mismo tiempo que proporciona una visión completa del proyecto.
+
+---
+
+# PRD: Juego Multijugador Online - "Zonas a Salvo"
+
+**Versión:** 1.0  
+**Fecha:** 13 de marzo de 2025  
+**Autor:** Grok 3 (xAI)
+
+---
+
+## 1. Resumen del Proyecto
+"Zonas a Salvo" es un juego multijugador online sencillo basado en un mapa 2D. Los jugadores eligen una forma geométrica al inicio de la partida y deben desplazarse a zonas verdes seguras que aparecen cada 15 segundos. Las zonas se reducen progresivamente, y los jugadores compiten hasta que solo queda uno. Incluye mecánicas de movimiento, rotación y colisiones.
+
+---
+
+## 2. Objetivo del Producto
+Crear un juego multijugador web competitivo, ligero y fácil de entender, con las siguientes características clave:
+- Mecánica simple basada en desplazamiento y rotación.
+- Competencia basada en habilidad espacial y estrategia.
+- Experiencia multijugador en tiempo real.
+
+---
+
+## 3. Requisitos Funcionales
+
+### 3.1. Lobby y Configuración Inicial
+- **F1.1:** Los jugadores acceden a una sala multijugador online (máximo de 10-20 jugadores por partida, ajustable).
+- **F1.2:** Cada jugador elige una forma geométrica antes de empezar:
+  - Opciones: cuadrado, triángulo, círculo, línea, pentágono, "L", rectángulo (extensible a más formas).
+  - Cada forma tiene un tamaño fijo en píxeles (ejemplo: 50x50 para cuadrado, ajustable).
+  - Las formas se representan con colores distintos para diferenciar a los jugadores.
+- **F1.3:** Botón de "Iniciar Partida" disponible cuando hay al menos 2 jugadores.
+
+### 3.2. Mapa y Zonas Seguras
+- **F2.1:** Mapa 2D rectangular (ejemplo: 1000x800 píxeles, ajustable).
+- **F2.2:** Cada 15 segundos, aparece una "zona verde" (área segura) en una posición aleatoria del mapa:
+  - La zona es un círculo o rectángulo (configurable).
+  - Tamaño inicial: suficientemente grande para que quepan todos los jugadores (ejemplo: 300x300 píxeles).
+  - Las zonas se reducen progresivamente en cada iteración (ejemplo: -10% de tamaño por ronda).
+- **F2.3:** Temporizador visible en pantalla que cuenta regresivamente desde 15 segundos hasta el cambio de zona.
+- **F2.4:** La zona verde anterior desaparece cuando aparece la nueva.
+
+### 3.3. Mecánicas de Jugabilidad
+- **F3.1:** Movimiento:
+  - Los jugadores pueden mover su forma en el plano 2D (arriba, abajo, izquierda, derecha).
+  - Velocidad de movimiento constante para todos (ejemplo: 5 píxeles por frame).
+- **F3.2:** Rotación:
+  - Los jugadores pueden rotar su forma sobre su centro en incrementos de 15° (o continuo, ajustable).
+  - Controles: teclas definidas (ejemplo: Q/E para rotar).
+- **F3.3:** Colisiones:
+  - Sistema de colisiones entre jugadores: las formas no pueden atravesarse.
+  - Si un jugador choca con otro, se detiene hasta que haya espacio para moverse.
+- **F3.4:** Supervivencia:
+  - Al final de cada intervalo de 15 segundos, los jugadores cuya forma no esté completamente dentro de la zona verde son eliminados.
+  - "Completamente dentro" significa que ningún píxel de la forma está fuera del área segura.
+
+### 3.4. Condición de Victoria
+- **F4.1:** La partida continúa hasta que solo queda un jugador vivo.
+- **F4.2:** Pantalla de "Ganador" con el nombre o color del jugador victorioso.
+- **F4.3:** Opción de "Volver al Lobby" para iniciar una nueva partida.
+
+---
+
+## 4. Requisitos No Funcionales
+- **NF1:** El juego debe ser ejecutable en navegadores web modernos (Chrome, Firefox, Edge).
+- **NF2:** Latencia multijugador mínima (<100ms idealmente) usando WebSockets o similar.
+- **NF3:** Interfaz gráfica simple pero clara (colores contrastantes, formas bien definidas).
+- **NF4:** Rendimiento: soportar hasta 20 jugadores sin caídas de FPS notables (<30 FPS).
+- **NF5:** Escalabilidad: el código debe permitir ajustar parámetros como tamaño del mapa, velocidad o intervalo de zonas.
+
+---
+
+## 5. Diseño y Experiencia de Usuario
+
+### 5.1. Interfaz
+- **Pantalla de inicio:**
+  - Botón "Unirse a Partida".
+  - Selección de forma con vista previa.
+- **Pantalla de juego:**
+  - Mapa 2D con fondo neutro (ejemplo: gris claro).
+  - Temporizador en la esquina superior.
+  - Indicador de jugadores vivos (ejemplo: "Jugadores: 8/10").
+- **Pantalla final:**
+  - Mensaje de victoria o derrota.
+
+### 5.2. Controles
+- **Teclado:**
+  - WASD o flechas: mover la forma.
+  - Q/E: rotar izquierda/derecha.
+- **Soporte opcional:** Configurable para gamepad o clics (futuro).
+
+---
+
+## 6. Tecnologías Sugeridas
+- **Frontend:** HTML5 Canvas para renderizado 2D, JavaScript para lógica.
+- **Backend:** Node.js con WebSockets para multijugador en tiempo real.
+- **Framework:** Phaser.js (opcional) para simplificar física y colisiones.
+- **Hosting:** Servidor básico (ejemplo: Heroku, AWS) para pruebas.
+
+---
+
+## 7. Flujo del Juego
+1. **Inicio:** Jugadores eligen forma y entran al lobby.
+2. **Partida:** Comienza el mapa, aparece la primera zona verde.
+3. **Rondas:** Cada 15 segundos:
+   - Nueva zona aparece.
+   - Jugadores se mueven/rotan para entrar.
+   - Eliminación de los que no logran entrar.
+4. **Fin:** Último jugador vivo gana.
+
+---
+
+## 8. Consideraciones Adicionales
+- **Balanceo:** Asegurarse de que ninguna forma tenga ventaja (ejemplo: línea vs. cuadrado en espacios estrechos).
+- **Debug:** Modo espectador opcional para desarrolladores.
+- **Extensibilidad:** Posibilidad de agregar power-ups o mapas temáticos en el futuro.
+
+---

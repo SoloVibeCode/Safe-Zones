@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Zones</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JT37WEPJ5Z"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-JT37WEPJ5Z');
+    </script>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Start screen -->
+        <div id="start-screen" class="screen">
+            <h1>Safe Zones</h1>
+            <button id="start-music-toggle" style="position: absolute; top: 20px; right: 20px;">🔊</button>
+            <div id="name-input-container">
+                <input type="text" id="player-name" maxlength="12" placeholder="Your name" required>
+            </div>
+            <div id="shape-selection">
+                <h2>Choose your shape:</h2>
+                <div class="shapes-grid">
+                    <button class="shape-btn" data-shape="square">⬛</button>
+                    <button class="shape-btn" data-shape="triangle">△</button>
+                    <button class="shape-btn" data-shape="circle">○</button>
+                    <button class="shape-btn" data-shape="line">─</button>
+                    <button class="shape-btn" data-shape="pentagon">⬠</button>
+                </div>
+            </div>
+            <div class="controls-info">
+                <h3>Controls:</h3>
+                <ul>
+                    <li>🎮 Movement: WASD or Arrow Keys</li>
+                    <li>🔄 Rotation: Q and E</li>
+                    <li>🎯 Goal: Stay in the safe zone!</li>
+                </ul>
+            </div>
+            <button id="join-game">Join Game</button>
+        </div>
+
+        <!-- Game screen -->
+        <div id="game-screen" class="screen hidden">
+            <div id="notifications-container"></div>
+            <div id="game-info">
+                <span id="timer">5</span>
+                <span id="phase-indicator"></span>
+                <span id="players-count">Players: 0/100</span>
+                <button id="music-toggle" style="margin-left: 20px;">🔊</button>
+            </div>
+            <div class="mobile-controls">
+                <div class="joystick-area">
+                    <div class="joystick"></div>
+                </div>
+                <div class="rotation-buttons">
+                    <div class="rotate-btn" id="rotate-left">↺</div>
+                    <div class="rotate-btn" id="rotate-right">↻</div>
+                </div>
+            </div>
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <!-- End screen -->
+        <div id="end-screen" class="screen hidden">
+            <h2 id="winner-text"></h2>
+            <button id="return-lobby">Return to Lobby</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/audioManager.js"></script>
+    <script src="js/shapes.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/safeZone.js"></script>
+    <script src="js/socket-client.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html> 

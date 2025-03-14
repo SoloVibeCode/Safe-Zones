@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Zones</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Start screen -->
+        <div id="start-screen" class="screen">
+            <h1>Safe Zones</h1>
+            <div id="name-input-container">
+                <input type="text" id="player-name" maxlength="12" placeholder="Your name" required>
+            </div>
+            <div id="shape-selection">
+                <h2>Choose your shape:</h2>
+                <div class="shapes-grid">
+                    <button class="shape-btn" data-shape="square">⬛</button>
+                    <button class="shape-btn" data-shape="triangle">△</button>
+                    <button class="shape-btn" data-shape="circle">○</button>
+                    <button class="shape-btn" data-shape="line">─</button>
+                    <button class="shape-btn" data-shape="pentagon">⬠</button>
+                </div>
+            </div>
+            <button id="join-game">Join Game</button>
+        </div>
+
+        <!-- Game screen -->
+        <div id="game-screen" class="screen hidden">
+            <div id="game-info">
+                <span id="timer">5</span>
+                <span id="phase-indicator"></span>
+                <span id="players-count">Players: 0/100</span>
+            </div>
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <!-- End screen -->
+        <div id="end-screen" class="screen hidden">
+            <h2 id="winner-text"></h2>
+            <button id="return-lobby">Return to Lobby</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/shapes.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/safeZone.js"></script>
+    <script src="js/socket-client.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html> * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+#game-container {
+    width: 1000px;
+    height: 800px;
+    position: relative;
+}
+
+.screen {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
+#gameCanvas {
+    background: #e0e0e0;
+    width: 100%;
+    height: 100%;
+}
+
+.shapes-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.shape-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    cursor: pointer;
+    border: 2px solid #333;
+    background: white;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.shape-btn[data-shape="square"] {
+    color: #2196F3;
+}
+
+.shape-btn[data-shape="triangle"] {
+    color: #4CAF50;
+}
+
+.shape-btn[data-shape="circle"] {
+    color: #F44336;
+}
+
+.shape-btn[data-shape="line"] {
+    color: #9C27B0;
+}
+
+.shape-btn[data-shape="pentagon"] {
+    color: #FF9800;
+}
+
+.shape-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.shape-btn.selected {
+    border-color: #4CAF50;
+    background: #e8f5e9;
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+}
+
+#game-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1;
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 24px;
+    display: flex;
+    gap: 20px;
+}
+
+#timer {
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.phase-indicator {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+#name-input-container {
+    margin-bottom: 20px;
+}
+
+#player-name {
+    padding: 10px;
+    font-size: 16px;
+    border: 2px solid #333;
+    border-radius: 4px;
+    width: 200px;
+    text-align: center;
+}
+
+.player-name-label {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    top: -25px;
+    left: 0;
+    color: white;
+    font-weight: bold;
+    text-shadow: 2px 2px 2px rgba(0,0,0,0.5);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+#players-count {
+    min-width: 150px;
+} class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.players = new Map();
+        this.safeZone = null;
+        this.timer = 5;
+        this.isRunning = false;
+        this.selectedShape = null;
+        this.isRestPhase = false;
+        
+        // Ajustar el tamaño del canvas
+        this.canvas.width = 1000;
+        this.canvas.height = 800;
+        
+        this.setupEventListeners();
+        this.setupMenuListeners();
+    }
+
+    setupEventListeners() {
+        document.addEventListener('keydown', this.handleKeyDown.bind(this));
+        document.addEventListener('keyup', this.handleKeyUp.bind(this));
+    }
+
+    setupMenuListeners() {
+        // Manejar selección de forma
+        const shapeBtns = document.querySelectorAll('.shape-btn');
+        shapeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remover selección previa
+                shapeBtns.forEach(b => b.classList.remove('selected'));
+                // Seleccionar nueva forma
+                btn.classList.add('selected');
+                this.selectedShape = btn.dataset.shape;
+            });
+        });
+
+        // Manejar botón de unirse
+        const joinBtn = document.getElementById('join-game');
+        joinBtn.addEventListener('click', () => {
+            if (!this.selectedShape) {
+                alert('Please select a shape first');
+                return;
+            }
+
+            // Unirse al juego y verificar que se ingresó el nombre
+            if (socketClient.joinGame(this.selectedShape)) {
+                // Ocultar pantalla de inicio y mostrar juego
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                this.start();
+            }
+        });
+
+        // Manejar botón de volver al lobby
+        const returnBtn = document.getElementById('return-lobby');
+        returnBtn.addEventListener('click', () => {
+            window.location.reload();
+        });
+    }
+
+    handleKeyDown(event) {
+        if (!this.isRunning) return;
+        
+        const player = this.players.get(socketClient.playerId);
+        if (!player) return;
+
+        switch(event.key) {
+            case 'w':
+            case 'ArrowUp':
+                player.moveUp = true;
+                break;
+            case 's':
+            case 'ArrowDown':
+                player.moveDown = true;
+                break;
+            case 'a':
+            case 'ArrowLeft':
+                player.moveLeft = true;
+                break;
+            case 'd':
+            case 'ArrowRight':
+                player.moveRight = true;
+                break;
+            case 'q':
+                player.rotateLeft = true;
+                break;
+            case 'e':
+                player.rotateRight = true;
+                break;
+        }
+    }
+
+    handleKeyUp(event) {
+        if (!this.isRunning) return;
+        
+        const player = this.players.get(socketClient.playerId);
+        if (!player) return;
+
+        switch(event.key) {
+            case 'w':
+            case 'ArrowUp':
+                player.moveUp = false;
+                break;
+            case 's':
+            case 'ArrowDown':
+                player.moveDown = false;
+                break;
+            case 'a':
+            case 'ArrowLeft':
+                player.moveLeft = false;
+                break;
+            case 'd':
+            case 'ArrowRight':
+                player.moveRight = false;
+                break;
+            case 'q':
+                player.rotateLeft = false;
+                break;
+            case 'e':
+                player.rotateRight = false;
+                break;
+        }
+    }
+
+    start() {
+        console.log('Iniciando juego'); // Para debug
+        this.isRunning = true;
+        this.gameLoop();
+    }
+
+    gameLoop() {
+        if (!this.isRunning) return;
+
+        this.update();
+        this.render();
+        requestAnimationFrame(() => this.gameLoop());
+    }
+
+    update() {
+        for (const player of this.players.values()) {
+            player.update();
+            this.checkCollisions(player);
+            
+            // Enviar actualización al servidor si es nuestro jugador
+            if (player.id === socketClient.playerId) {
+                socketClient.sendPlayerUpdate(player);
+            }
+        }
+    }
+
+    render() {
+        if (!this.ctx || !this.canvas) {
+            console.error('Canvas o contexto no disponible');
+            return;
+        }
+
+        // Limpiar el canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Dibujar fondo
+        this.ctx.fillStyle = '#e0e0e0';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Dibujar zona segura
+        if (this.safeZone && !this.isRestPhase) {
+            console.log('Dibujando zona segura:', this.safeZone);
+            this.safeZone.draw(this.ctx);
+            const phaseIndicator = document.getElementById('phase-indicator');
+            if (phaseIndicator) {
+                phaseIndicator.textContent = 'Find the safe zone!';
+                phaseIndicator.style.color = '#FF4444';
+            }
+        } else if (this.isRestPhase) {
+            const phaseIndicator = document.getElementById('phase-indicator');
+            if (phaseIndicator) {
+                phaseIndicator.textContent = 'Rest phase';
+                phaseIndicator.style.color = '#FFD700';
+            }
+        }
+
+        // Dibujar jugadores
+        console.log('Jugadores:', this.players); // Para debug
+        for (const player of this.players.values()) {
+            player.draw(this.ctx);
+        }
+    }
+
+    checkCollisions(player) {
+        // Colisiones con los bordes del mapa
+        player.x = Math.max(0, Math.min(this.canvas.width - player.size, player.x));
+        player.y = Math.max(0, Math.min(this.canvas.height - player.size, player.y));
+
+        // Colisiones entre jugadores
+        for (const otherPlayer of this.players.values()) {
+            if (player !== otherPlayer) {
+                if (this.checkPlayerCollision(player, otherPlayer)) {
+                    // Revertir el último movimiento
+                    player.x = player.previousX;
+                    player.y = player.previousY;
+                }
+            }
+        }
+    }
+
+    checkPlayerCollision(player1, player2) {
+        return player1.isColliding(player2);
+    }
+}
+
+const game = new Game(); class Player {
+    constructor(id, x, y, shape, color, name = '') {
+        this.id = id;
+        this.x = x;
+        this.y = y;
+        this.previousX = x;
+        this.previousY = y;
+        this.shape = shape;
+        this.color = color;
+        this.size = 50;
+        this.speed = 5;
+        this.rotation = 0;
+        this.rotationSpeed = 5;
+        this.name = name;
+
+        // Flags de movimiento
+        this.moveUp = false;
+        this.moveDown = false;
+        this.moveLeft = false;
+        this.moveRight = false;
+        this.rotateLeft = false;
+        this.rotateRight = false;
+    }
+
+    update() {
+        this.previousX = this.x;
+        this.previousY = this.y;
+
+        if (this.moveUp) this.y -= this.speed;
+        if (this.moveDown) this.y += this.speed;
+        if (this.moveLeft) this.x -= this.speed;
+        if (this.moveRight) this.x += this.speed;
+        
+        if (this.rotateLeft) this.rotation -= this.rotationSpeed;
+        if (this.rotateRight) this.rotation += this.rotationSpeed;
+    }
+
+    draw(ctx) {
+        if (!ctx) {
+            console.error('Contexto no disponible');
+            return;
+        }
+        
+        console.log('Dibujando jugador:', this); // Para debug
+
+        // Dibujar el nombre
+        ctx.save();
+        ctx.font = '14px Arial';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.strokeText(this.name, this.x + this.size/2, this.y - 5);
+        ctx.fillText(this.name, this.x + this.size/2, this.y - 5);
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(this.x + this.size/2, this.y + this.size/2);
+        ctx.rotate(this.rotation * Math.PI / 180);
+        
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        switch(this.shape) {
+            case 'square':
+                ctx.rect(-this.size/2, -this.size/2, this.size, this.size);
+                break;
+            case 'triangle':
+                ctx.moveTo(-this.size/2, this.size/2);
+                ctx.lineTo(this.size/2, this.size/2);
+                ctx.lineTo(0, -this.size/2);
+                break;
+            case 'circle':
+                ctx.arc(0, 0, this.size/2, 0, Math.PI * 2);
+                break;
+            case 'line':
+                ctx.rect(-this.size/2, -this.size/8, this.size, this.size/4);
+                break;
+            case 'pentagon':
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 2 * Math.PI / 5) - Math.PI/2;
+                    const x = Math.cos(angle) * this.size/2;
+                    const y = Math.sin(angle) * this.size/2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                break;
+        }
+
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    isColliding(otherPlayer) {
+        // Primero hacemos una comprobación rápida de bounding box
+        if (!this.checkBoundingBoxCollision(otherPlayer)) {
+            return false;
+        }
+
+        // Si pasa la primera comprobación, hacemos una más precisa según la forma
+        return this.checkPreciseCollision(otherPlayer);
+    }
+
+    checkBoundingBoxCollision(other) {
+        return this.x < other.x + other.size &&
+               this.x + this.size > other.x &&
+               this.y < other.y + other.size &&
+               this.y + this.size > other.y;
+    }
+
+    checkPreciseCollision(other) {
+        // Obtener los puntos de cada forma
+        const points1 = this.getShapePoints();
+        const points2 = other.getShapePoints();
+
+        // Para círculos usamos una comprobación especial
+        if (this.shape === 'circle' || other.shape === 'circle') {
+            return this.checkCircleCollision(other);
+        }
+
+        // Para otras formas usamos el algoritmo de separación de ejes (SAT)
+        return this.checkPolygonCollision(points1, points2);
+    }
+
+    getShapePoints() {
+        const points = [];
+        const centerX = this.x + this.size/2;
+        const centerY = this.y + this.size/2;
+        const angle = this.rotation * Math.PI / 180;
+
+        switch(this.shape) {
+            case 'square':
+                points.push(this.rotatePoint(centerX - this.size/2, centerY - this.size/2, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX + this.size/2, centerY - this.size/2, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX + this.size/2, centerY + this.size/2, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX - this.size/2, centerY + this.size/2, centerX, centerY, angle));
+                break;
+
+            case 'triangle':
+                points.push(this.rotatePoint(centerX, centerY - this.size/2, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX - this.size/2, centerY + this.size/2, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX + this.size/2, centerY + this.size/2, centerX, centerY, angle));
+                break;
+
+            case 'line':
+                points.push(this.rotatePoint(centerX - this.size/2, centerY - this.size/8, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX + this.size/2, centerY - this.size/8, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX + this.size/2, centerY + this.size/8, centerX, centerY, angle));
+                points.push(this.rotatePoint(centerX - this.size/2, centerY + this.size/8, centerX, centerY, angle));
+                break;
+
+            case 'pentagon':
+                for (let i = 0; i < 5; i++) {
+                    const a = (i * 2 * Math.PI / 5) - Math.PI/2 + angle;
+                    points.push({
+                        x: centerX + Math.cos(a) * this.size/2,
+                        y: centerY + Math.sin(a) * this.size/2
+                    });
+                }
+                break;
+        }
+        return points;
+    }
+
+    rotatePoint(x, y, cx, cy, angle) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        return {
+            x: (x - cx) * cos - (y - cy) * sin + cx,
+            y: (x - cx) * sin + (y - cy) * cos + cy
+        };
+    }
+
+    checkCircleCollision(other) {
+        const dx = (this.x + this.size/2) - (other.x + other.size/2);
+        const dy = (this.y + this.size/2) - (other.y + other.size/2);
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (this.shape === 'circle' && other.shape === 'circle') {
+            return distance < this.size/2 + other.size/2;
+        }
+
+        // Si solo uno es círculo, comprobamos contra los puntos del polígono
+        const circle = this.shape === 'circle' ? this : other;
+        const polygon = this.shape === 'circle' ? other : this;
+        const polygonPoints = polygon.getShapePoints();
+
+        // Comprobar distancia del centro del círculo a cada línea del polígono
+        return this.checkCirclePolygonCollision(circle, polygonPoints);
+    }
+
+    checkCirclePolygonCollision(circle, points) {
+        const centerX = circle.x + circle.size/2;
+        const centerY = circle.y + circle.size/2;
+        const radius = circle.size/2;
+
+        for (let i = 0; i < points.length; i++) {
+            const start = points[i];
+            const end = points[(i + 1) % points.length];
+            
+            const distance = this.pointToLineDistance(centerX, centerY, start.x, start.y, end.x, end.y);
+            if (distance < radius) return true;
+        }
+        return false;
+    }
+
+    pointToLineDistance(px, py, x1, y1, x2, y2) {
+        const A = px - x1;
+        const B = py - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+
+        if (lenSq !== 0) param = dot / lenSq;
+
+        let xx, yy;
+
+        if (param < 0) {
+            xx = x1;
+            yy = y1;
+        } else if (param > 1) {
+            xx = x2;
+            yy = y2;
+        } else {
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+        }
+
+        const dx = px - xx;
+        const dy = py - yy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    checkPolygonCollision(points1, points2) {
+        // Implementación del algoritmo SAT (Separating Axis Theorem)
+        const edges = this.getEdgeVectors(points1).concat(this.getEdgeVectors(points2));
+        
+        for (const edge of edges) {
+            const axis = this.normalize({ x: -edge.y, y: edge.x });
+            const projection1 = this.projectPolygon(points1, axis);
+            const projection2 = this.projectPolygon(points2, axis);
+            
+            if (!this.overlaps(projection1, projection2)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    getEdgeVectors(points) {
+        const edges = [];
+        for (let i = 0; i < points.length; i++) {
+            const p1 = points[i];
+            const p2 = points[(i + 1) % points.length];
+            edges.push({ x: p2.x - p1.x, y: p2.y - p1.y });
+        }
+        return edges;
+    }
+
+    normalize(vector) {
+        const length = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+        return { x: vector.x / length, y: vector.y / length };
+    }
+
+    projectPolygon(points, axis) {
+        let min = Infinity;
+        let max = -Infinity;
+        
+        for (const point of points) {
+            const projection = point.x * axis.x + point.y * axis.y;
+            min = Math.min(min, projection);
+            max = Math.max(max, projection);
+        }
+        
+        return { min, max };
+    }
+
+    overlaps(projection1, projection2) {
+        return projection1.max >= projection2.min && projection2.max >= projection1.min;
+    }
+} class SafeZone {
+    constructor(x, y, size, isCircle = true) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.isCircle = isCircle;
+        console.log('SafeZone creada:', this); // Debug
+    }
+
+    draw(ctx) {
+        if (!ctx) return;
+        console.log('Dibujando SafeZone:', this); // Debug
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+        ctx.lineWidth = 3;
+
+        if (this.isCircle) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size/2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        } else {
+            ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            ctx.strokeRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+        }
+
+        ctx.restore();
+    }
+
+    isPlayerInside(player) {
+        if (this.isCircle) {
+            const dx = player.x + player.size/2 - this.x;
+            const dy = player.y + player.size/2 - this.y;
+            return Math.sqrt(dx*dx + dy*dy) <= this.size/2 - player.size/2;
+        } else {
+            return player.x >= this.x - this.size/2 &&
+                   player.x + player.size <= this.x + this.size/2 &&
+                   player.y >= this.y - this.size/2 &&
+                   player.y + player.size <= this.y + this.size/2;
+        }
+    }
+} class SocketClient {
+    constructor() {
+        this.socket = io();
+        this.playerId = null;
+        this.setupSocketListeners();
+    }
+
+    setupSocketListeners() {
+        this.socket.on('connect', () => {
+            console.log('Conectado al servidor');
+            this.playerId = this.socket.id;
+        });
+
+        this.socket.on('gameState', (gameState) => {
+            console.log('Recibido gameState:', gameState);
+            if (gameState.safeZone && !game.safeZone) {
+                game.safeZone = new SafeZone(
+                    gameState.safeZone.x,
+                    gameState.safeZone.y,
+                    gameState.safeZone.size,
+                    gameState.safeZone.isCircle
+                );
+            }
+            this.updateGameState(gameState);
+        });
+
+        this.socket.on('newSafeZone', (zoneData) => {
+            console.log('Nueva zona segura recibida:', zoneData);
+            game.safeZone = new SafeZone(
+                zoneData.x,
+                zoneData.y,
+                zoneData.size,
+                zoneData.isCircle
+            );
+        });
+
+        this.socket.on('playerEliminated', (playerId) => {
+            game.players.delete(playerId);
+            if (playerId === this.playerId) {
+                this.handleElimination();
+            }
+        });
+
+        this.socket.on('gameOver', (winnerId) => {
+            this.handleGameOver(winnerId);
+        });
+
+        this.socket.on('roomFull', () => {
+            alert('The room is full (100 players maximum). Please try again later.');
+            window.location.reload();
+        });
+    }
+
+    updateGameState(gameState) {
+        // Actualizar jugadores
+        for (const playerData of gameState.players) {
+            if (!game.players.has(playerData.id)) {
+                const player = new Player(
+                    playerData.id,
+                    playerData.x,
+                    playerData.y,
+                    playerData.shape,
+                    playerData.color,
+                    playerData.name
+                );
+                game.players.set(playerData.id, player);
+            } else {
+                const player = game.players.get(playerData.id);
+                if (playerData.id !== this.playerId) {
+                    player.x = playerData.x;
+                    player.y = playerData.y;
+                    player.rotation = playerData.rotation;
+                    player.name = playerData.name;
+                }
+            }
+        }
+
+        // Limpiar jugadores que ya no están en el juego
+        for (const [playerId] of game.players) {
+            if (!gameState.players.find(p => p.id === playerId)) {
+                game.players.delete(playerId);
+            }
+        }
+
+        // Actualizar timer y estado
+        game.timer = gameState.timer;
+        game.isRestPhase = gameState.isRestPhase;
+        
+        // Actualizar UI
+        const timerElement = document.getElementById('timer');
+        timerElement.textContent = gameState.timer;
+        if (gameState.isRestPhase) {
+            timerElement.style.color = '#FFD700'; // Dorado para fase de descanso
+        } else {
+            timerElement.style.color = gameState.timer <= 3 ? '#FF0000' : '#FFFFFF'; // Rojo cuando queda poco tiempo
+        }
+        
+        document.getElementById('players-count').textContent = 
+            `Players: ${gameState.players.length}/100`;
+    }
+
+    handleElimination() {
+        // Mostrar mensaje de eliminación pero mantener la pantalla de juego visible
+        const phaseIndicator = document.getElementById('phase-indicator');
+        if (phaseIndicator) {
+            phaseIndicator.textContent = 'You have been eliminated! You can keep watching...';
+            phaseIndicator.style.color = '#FF0000';
+        }
+    }
+
+    handleGameOver(winnerId) {
+        let winnerText;
+        if (winnerId === this.playerId) {
+            winnerText = 'You won!';
+        } else if (winnerId === null) {
+            winnerText = 'Game Over - No players remaining';
+        } else {
+            winnerText = 'Game Over!';
+        }
+        
+        document.getElementById('winner-text').textContent = winnerText;
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('end-screen').classList.remove('hidden');
+    }
+
+    sendPlayerUpdate(player) {
+        this.socket.emit('playerUpdate', {
+            x: player.x,
+            y: player.y,
+            rotation: player.rotation,
+            shape: player.shape,
+            color: player.color
+        });
+    }
+
+    joinGame(shape) {
+        const nameInput = document.getElementById('player-name');
+        const playerName = nameInput.value.trim();
+        
+        if (!playerName) {
+            alert('Please enter your name');
+            return false;
+        }
+
+        // Crear jugador local inmediatamente
+        const player = new Player(
+            this.playerId,
+            Math.random() * 900,
+            Math.random() * 700,
+            shape,
+            '#FF0000',
+            playerName
+        );
+        game.players.set(this.playerId, player);
+        
+        // Enviar al servidor
+        this.socket.emit('joinGame', { shape, name: playerName });
+        return true;
+    }
+}
+
+const socketClient = new SocketClient(); class GameRoom {
+    constructor(io) {
+        this.io = io;
+        this.players = new Map();
+        this.safeZone = null;
+        this.timer = 5;
+        this.isGameRunning = false;
+        this.zoneInterval = null;
+        this.maxPlayers = 100;
+        this.colors = this.generateColors(100);
+        this.isRestPhase = false;
+        this.zoneSize = 300;
+        this.zoneShrinkAmount = 30;
+        this.minPlayers = 1;
+        this.phaseTime = 5;
+    }
+
+    generateColors(count) {
+        const colors = [];
+        for (let i = 0; i < count; i++) {
+            const hue = (i * 360 / count) % 360;
+            const saturation = 70 + Math.random() * 30;
+            const lightness = 45 + Math.random() * 10;
+            colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+        }
+        return colors;
+    }
+
+    addPlayer(id, shape, name) {
+        if (this.players.size >= this.maxPlayers) {
+            return false;
+        }
+
+        const color = this.colors[this.players.size % this.colors.length];
+        const player = {
+            id,
+            x: Math.random() * 900,
+            y: Math.random() * 700,
+            shape,
+            color,
+            rotation: 0,
+            size: 50,
+            name
+        };
+        this.players.set(id, player);
+        this.io.emit('gameState', this.getGameState());
+        return true;
+    }
+
+    removePlayer(id) {
+        this.players.delete(id);
+        if (this.players.size === 0 && this.isGameRunning) {
+            this.endGame();
+        }
+    }
+
+    updatePlayer(id, data) {
+        const player = this.players.get(id);
+        if (player) {
+            player.x = data.x;
+            player.y = data.y;
+            player.rotation = data.rotation;
+        }
+    }
+
+    canStartGame() {
+        return true;
+    }
+
+    startGame() {
+        console.log('Starting game in GameRoom...');
+        this.isGameRunning = true;
+        this.zoneSize = 300;
+        this.isRestPhase = false;
+        this.timer = this.phaseTime;
+        
+        if (this.zoneInterval) {
+            clearInterval(this.zoneInterval);
+        }
+
+        this.createNewSafeZone();
+
+        this.zoneInterval = setInterval(() => {
+            this.timer--;
+            console.log('Timer:', this.timer, 'RestPhase:', this.isRestPhase);
+            
+            this.io.emit('gameState', this.getGameState());
+            
+            if (this.timer <= 0) {
+                if (this.isRestPhase) {
+                    console.log('End of rest phase - Creating new zone');
+                    this.isRestPhase = false;
+                    this.timer = this.phaseTime;
+                    this.zoneSize = Math.max(50, this.zoneSize - this.zoneShrinkAmount);
+                    this.createNewSafeZone();
+                } else {
+                    console.log('End of active phase - Starting rest');
+                    this.checkPlayersInZone();
+                    this.safeZone = null;
+                    this.isRestPhase = true;
+                    this.timer = this.phaseTime;
+                }
+            }
+        }, 1000);
+    }
+
+    createNewSafeZone() {
+        console.log('Creating new safe zone...');
+        const newZone = {
+            x: Math.random() * (1000 - this.zoneSize) + this.zoneSize/2,
+            y: Math.random() * (800 - this.zoneSize) + this.zoneSize/2,
+            size: this.zoneSize,
+            isCircle: true
+        };
+        this.safeZone = newZone;
+        console.log('New zone created:', newZone);
+        this.io.emit('newSafeZone', newZone);
+    }
+
+    checkPlayersInZone() {
+        for (const [id, player] of this.players.entries()) {
+            if (!this.isPlayerInSafeZone(player)) {
+                this.players.delete(id);
+                this.io.emit('playerEliminated', id);
+            }
+        }
+
+        if (this.players.size === 0) {
+            this.endGame();
+        }
+    }
+
+    isPlayerInSafeZone(player) {
+        if (!this.safeZone) return true;
+
+        if (this.safeZone.isCircle) {
+            const dx = player.x - this.safeZone.x;
+            const dy = player.y - this.safeZone.y;
+            return Math.sqrt(dx*dx + dy*dy) <= this.safeZone.size/2;
+        } else {
+            return player.x >= this.safeZone.x - this.safeZone.size/2 &&
+                   player.x <= this.safeZone.x + this.safeZone.size/2 &&
+                   player.y >= this.safeZone.y - this.safeZone.size/2 &&
+                   player.y <= this.safeZone.y + this.safeZone.size/2;
+        }
+    }
+
+    endGame(winnerId = null) {
+        console.log('Game Over. Remaining players:', this.players.size);
+        this.isGameRunning = false;
+        clearInterval(this.zoneInterval);
+        this.safeZone = null;
+        this.io.emit('gameOver', winnerId);
+    }
+
+    getGameState() {
+        return {
+            players: Array.from(this.players.values()),
+            timer: this.timer,
+            safeZone: this.safeZone,
+            isRestPhase: this.isRestPhase
+        };
+    }
+
+    update() {
+        // Aquí puedes agregar lógica adicional de actualización del juego
+    }
+}
+
+module.exports = GameRoom; const express = require('express');
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+const GameRoom = require('./gameRoom');
+
+// Servir archivos estáticos desde la carpeta client
+app.use(express.static('../client'));
+
+// Crear GameRoom con acceso a io
+const gameRoom = new GameRoom(io);
+
+io.on('connection', (socket) => {
+    console.log('Usuario conectado:', socket.id);
+
+    socket.on('joinGame', (data) => {
+        if (gameRoom.players.size >= gameRoom.maxPlayers) {
+            socket.emit('roomFull');
+            return;
+        }
+
+        const success = gameRoom.addPlayer(socket.id, data.shape, data.name);
+        if (!success) {
+            socket.emit('roomFull');
+            return;
+        }
+        
+        // Iniciar el juego inmediatamente cuando se une un jugador
+        if (!gameRoom.isGameRunning) {
+            console.log('Iniciando juego con primer jugador...');
+            gameRoom.startGame();
+        }
+    });
+
+    socket.on('playerUpdate', (data) => {
+        gameRoom.updatePlayer(socket.id, data);
+    });
+
+    socket.on('disconnect', () => {
+        gameRoom.removePlayer(socket.id);
+        console.log('Usuario desconectado:', socket.id);
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0';
+http.listen(PORT, HOST, () => {
+    console.log(`Servidor corriendo en http://${HOST}:${PORT}`);
+});
+
+// Actualización del estado del juego
+setInterval(() => {
+    if (gameRoom.isGameRunning) {
+        gameRoom.update();
+        io.emit('gameState', gameRoom.getGameState());
+    }
+}, 1000 / 60); // 60 FPS 
